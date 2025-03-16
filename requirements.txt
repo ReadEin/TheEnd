@@ -11,5 +11,5 @@ langchain>=0.0.267
 python-dotenv>=1.0.0 
 
 # openai, langchain-openai package
-openai==1.0.0
+openai>=1.58.1
 langchain-openai>=0.0.2
