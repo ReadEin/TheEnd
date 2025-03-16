@@ -1,0 +1,1 @@
+﻿### 해당 프로젝트는 openAI API 와 LangChain/LangGraph 에 대한 예시 프로젝트입니다.
