@@ -2,7 +2,7 @@
 from pydantic import BaseModel
 from typing import TypeVar
 
-Prompt_Schema = TypeVar('Schema', bound=BaseModel)
+Prompt_Schema = TypeVar('Prompt_Schema', bound=BaseModel)
 
 class PromptSentence(Generic[Prompt_Schema]):
     # template

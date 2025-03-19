@@ -22,19 +22,25 @@ class LlmAgentPipe():
     _llm_agent:LLMAgent
     _pipe_action:LlmAgentPipeAction[PipeActionInputSchema, PipeActionOutputSchema]
     _callback:Callable[[PipeActionOutputSchema], Any]
+    _action_input_schema:PipeActionInputSchema # PipeActionInputSchema의 키 목록
+    _action_output_schema:PipeActionOutputSchema # PipeActionOutputSchema의 키 목록
     def __init__(
         self, llm_agent: LLMAgent,
-        pipe_action:LlmAgentPipeAction[PipeActionInputSchema, PipeActionOutputSchema]
+        pipe_action:LlmAgentPipeAction[PipeActionInputSchema, PipeActionOutputSchema],
+        action_input_schema_keys:list[str],
+        action_output_schema_keys:list[str]
         ):
         self._llm_agent = llm_agent
         self._pipe_action = pipe_action
+        self._action_input_schema = action_input_schema_keys
+        self._action_output_schema = action_output_schema_keys
     def run(self, initial_prompt: PromptSentence[Prompt_Schema]) -> PipeActionOutputSchema:
         # 1. 초기 프롬프트 실행
         initial_result = self._llm_agent.run(initial_prompt)
         # 2. JFormatter 프롬프트 생성 및 실행
         jformatter_schema = JFormatterSchema(
             content=initial_result,
-            json_keys=PipeActionInputSchema.model_fields.keys()
+            json_keys=self._action_input_schema
         )
         jformatter_prompt = JFormatterPrompt(jformatter_schema)
         json_result = self._llm_agent.run(jformatter_prompt)
