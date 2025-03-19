@@ -1,5 +1,5 @@
 ﻿import json
-from typing import Any, Callable, Dict, Generic, List, TypeVar
+from typing import Callable, Generic, TypeVar, Any
 
 from pydantic import BaseModel
 
@@ -17,17 +17,18 @@ class LlmAgentPipeAction(Generic[PipeActionInputSchema, PipeActionOutputSchema])
     def run(self, input:PipeActionInputSchema)->PipeActionOutputSchema:
         return self.action(input)
 
-class LlmAgentPipe:
+class LlmAgentPipe():
     """LlmAgent를 사용하여 프롬프트 -> Json 파싱 -> 액션 -> 결과 반환"""
     _llm_agent:LLMAgent
     _pipe_action:LlmAgentPipeAction[PipeActionInputSchema, PipeActionOutputSchema]
+    _callback:Callable[[PipeActionOutputSchema], Any]
     def __init__(
         self, llm_agent: LLMAgent,
         pipe_action:LlmAgentPipeAction[PipeActionInputSchema, PipeActionOutputSchema]
         ):
         self._llm_agent = llm_agent
         self._pipe_action = pipe_action
-    def run(self, initial_prompt: PromptSentence[Any]) -> PipeActionOutputSchema:
+    def run(self, initial_prompt: PromptSentence[Prompt_Schema]) -> PipeActionOutputSchema:
         # 1. 초기 프롬프트 실행
         initial_result = self._llm_agent.run(initial_prompt)
         # 2. JFormatter 프롬프트 생성 및 실행
@@ -48,7 +49,15 @@ class LlmAgentPipe:
         try:
             # 파싱된 데이터를 PipeActionInputSchema로 변환
             input_schema = PipeActionInputSchema(**parsed)
-            return self._pipe_action.run(input_schema)
+            run_result =  self._pipe_action.run(input_schema)
         except (ValueError, TypeError) as e:
             # PipeActionInputSchema 생성 실패 또는 액션 실행 중 오류 발생
             raise ValueError(f"pipe action error : {str(e)}") from e
+        if(self._callback):
+            self._callback(run_result)
+        return run_result
+    
+    def set_callback(self, callback:Callable[[PipeActionOutputSchema], Any]):
+        ## 콜백 설정. 다음 파이프 호출 가능.
+        self._callback = callback
+
