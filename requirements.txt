@@ -11,8 +11,12 @@ langchain>=0.0.267
 python-dotenv>=1.0.0 
 
 # openai, langchain-openai package
-openai>=1.58.1
+openai>=1.65.0
 langchain-openai>=0.0.2
 
 # langchain-core package
 langchain-core>=0.0.267
+
+httpx>=0.24.1
+pydantic>=2.0.0
+typing-extensions>=4.5.0

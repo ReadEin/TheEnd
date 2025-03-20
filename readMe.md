@@ -28,3 +28,37 @@ isort
 ```Batch Runnere 플러그인 설치 시, bat 확장자 파일에서 실행 버튼이 생김.```
 ###### project_initialize.bat
 ```프로젝트 venv 세팅, 빌드```
+
+##### .vscode
+```
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "TEST_MODE": "true"
+            }
+        },
+        {
+            "name": "Python Debugger: All Test File",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "unittest",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "TEST_MODE": "true"
+            }
+        }
+    ]
+}
+```

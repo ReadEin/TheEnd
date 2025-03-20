@@ -1,4 +1,5 @@
 chcp 65001
 echo "run all unittest"
 cd ..
-python -m pytest -v
+set PYTHONPATH=%CD%
+python -m unittest discover -s tests
