@@ -2,7 +2,7 @@ from src.agent_impl.openai.schema.completion import CompletionCreate, Completion
 from src.agent_impl.openai.schema.message import Message
 from src.agent_impl.openai.schema.tool import Tool, ToolChoice
 from src.agent_impl.openai.schema.function import Function, FunctionCall, FunctionItem
-from src.agent_impl.openai.schema.parameters import Parameters, Properties
+from src.agent_impl.openai.schema.parameters import Parameters
 from src.agent_impl.openai.schema.enums import RoleEnum, FinishReasonEnum
 import unittest
 
@@ -34,13 +34,12 @@ class TestCompletionCreate(unittest.TestCase):
         ]
         
         # 도구 생성
-        class LocationParam(Properties):
-            location: dict = {
+        location_properties = {
                 "type": "string",
                 "description": "City name"
             }
         
-        params = Parameters(properties=LocationParam())
+        params = Parameters(properties=location_properties)
         
         def get_weather(location: str):
             return f"Weather in {location}: Sunny, 25°C"
