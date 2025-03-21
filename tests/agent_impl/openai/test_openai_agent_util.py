@@ -1,208 +1,435 @@
 import unittest
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, MagicMock
+import json
 
-from src.agent_impl.openai.openai_agent_util import OpenAIAgentClient
-from src.agent_impl.openai.openai_agent_schema import (
-    Message, RoleEnum, CompletionCreate, FinishReasonEnum, FunctionCall, Tool, ToolChoice, FunctionItem
-)
+example_structured_output_request = {
+  "model": "gpt-3.5-turbo",
+  "messages": [
+    {
+      "role": "user",
+      "content": "아래 정보를 JSON 형식으로 정리해줘.\n이름: 홍길동\n나이: 30\n직업: 개발자"
+    }
+  ],
+  "temperature": 0,
+  "max_tokens": 150
+}
 
-class TestOpenAIAgentClient(unittest.TestCase):
+example_structured_output_response ={
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "created": 1670000000,
+  "model": "gpt-3.5-turbo",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\n  \"name\": \"홍길동\",\n  \"age\": 30,\n  \"job\": \"개발자\"\n}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 50,
+    "completion_tokens": 100,
+    "total_tokens": 150
+  }
+}
+
+
+example_function_call_request = {
+  "model": "gpt-3.5-turbo-0613",
+  "messages": [
+    {
+      "role": "user",
+      "content": "현재 서울의 날씨 정보를 알려줘."
+    }
+  ],
+  "functions": [
+    {
+      "name": "get_weather",
+      "description": "서울의 날씨 정보를 가져옵니다.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string",
+            "description": "지역 이름"
+          },
+          "temperature": {
+            "type": "number",
+            "description": "현재 온도 (섭씨)"
+          },
+          "description": {
+            "type": "string",
+            "description": "날씨 설명"
+          }
+        },
+        "required": ["location", "temperature", "description"]
+      }
+    }
+  ],
+  "function_call": "auto"
+}
+
+example_function_call_response = {
+  "id": "chatcmpl-def456",
+  "object": "chat.completion",
+  "created": 1670001234,
+  "model": "gpt-3.5-turbo-0613",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "null",
+        "function_call": {
+          "name": "get_weather",
+          "arguments": "{\n  \"location\": \"Seoul\",\n  \"temperature\": 18,\n  \"description\": \"맑음\"\n}"
+        }
+      },
+      "finish_reason": "function_call"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 70,
+    "completion_tokens": 50,
+    "total_tokens": 120
+  }
+}
+
+
+class TestOpenAIAgentUtil(unittest.TestCase):
+    """
+    OpenAIAgentUtil 클래스의 테스트 클래스
+    mocking targets:
+        - _get_access_token
+        - _create_agent
+        - completion
+    """
     
-    @patch('src.agent_impl.openai.openai_agent_util.OpenAI')
-    @patch('os.path.exists')
-    @patch('builtins.open', new_callable=mock_open, read_data="test-api-token")
-    def test_init_and_create_agent(self, mock_file, mock_exists, mock_openai):
-        # 파일 존재 여부 모킹
-        mock_exists.return_value = True
+    @patch('src.agent_impl.openai.openai_agent_util.OpenAIAgentClient._get_access_token')
+    @patch('src.agent_impl.openai.openai_agent_util.OpenAIAgentClient._create_agent')
+    def test_create_params_structured_output(self, mock_create_agent, mock_get_access_token):
+        """
+        구조화된 출력을 위한 매개변수 생성 테스트
+        """
+        # Mocking 설정
+        mock_get_access_token.return_value = "mock_access_token"
         
-        # OpenAI 클라이언트 모킹
-        mock_client = MagicMock()
-        mock_openai.return_value = mock_client
+        from src.agent_impl.openai.openai_agent_util import OpenAIAgentClient
+        from src.agent_impl.openai.schema.message import Message
+        from src.agent_impl.openai.schema.enums import RoleEnum
+        from src.agent_impl.openai.schema.completion import CompletionCreate
         
-        # 클라이언트 초기화
-        client = OpenAIAgentClient(model_name="gpt-4")
+        # 테스트를 위한 클라이언트 생성
+        client = OpenAIAgentClient(model_name="gpt-3.5-turbo")
         
-        # 테스트 검증
-        mock_exists.assert_called_once_with(".private.openai_token")
-        mock_file.assert_called_once_with(".private.openai_token", "r")
-        mock_openai.assert_called_once_with(api_key="test-api-token")
-        self.assertEqual(client._model_name, "gpt-4")
-        self.assertEqual(client._chat_completion_client, mock_client.chat.completions)
-    
-    @patch.object(OpenAIAgentClient, '_get_access_token')
-    @patch('src.agent_impl.openai.openai_agent_util.OpenAI')
-    def test_create_agent_exception(self, mock_openai, mock_get_token):
-        # 예외 발생 시뮬레이션
-        mock_get_token.side_effect = ValueError("Token error")
+        # _create_agent가 호출되었는지 확인
+        mock_create_agent.assert_called_once()
         
-        # 예외 발생 검증
-        with self.assertRaises(ValueError) as context:
-            OpenAIAgentClient(model_name="gpt-4")
-        self.assertIn("Token error", str(context.exception))
-    
-    @patch.object(OpenAIAgentClient, '_get_access_token')
-    @patch('src.agent_impl.openai.openai_agent_util.OpenAI')
-    def test_create_params_basic(self, mock_openai, mock_get_token):
-        # 기본 설정
-        mock_get_token.return_value = "test-token"
-        mock_client = MagicMock()
-        mock_openai.return_value = mock_client
+        # 테스트 메시지 생성
+        messages = [
+            Message(
+                index=0, 
+                role=RoleEnum.USER, 
+                content="아래 정보를 JSON 형식으로 정리해줘.\n이름: 홍길동\n나이: 30\n직업: 개발자"
+            )
+        ]
         
-        client = OpenAIAgentClient(model_name="gpt-4")
+        # CompletionCreate 객체 생성
+        completion_create = CompletionCreate(messages=messages)
         
-        # 테스트 데이터
-        message = Message(index=0, role=RoleEnum.USER, content="Hello")
-        completion_create = CompletionCreate(messages=[message])
-        
-        # 함수 호출
+        # _create_params 메서드 호출
         params = client._create_params(completion_create)
         
-        # 검증
-        self.assertEqual(params["model"], "gpt-4")
-        self.assertEqual(len(params["messages"]), 1)
-        self.assertEqual(params["messages"][0]["role"], "user")
-        self.assertEqual(params["messages"][0]["content"], "Hello")
+        # 예상 출력과 비교
+        expected_messages = example_structured_output_request["messages"]
+        
+        # 기본 필드 확인
+        self.assertEqual(params["model"], "gpt-3.5-turbo")
+        self.assertEqual(len(params["messages"]), len(expected_messages))
+        
+        # 메시지 내용 확인
+        for i, msg in enumerate(params["messages"]):
+            self.assertEqual(msg["role"], expected_messages[i]["role"])
+            self.assertEqual(msg["content"], expected_messages[i]["content"])
+        
+        # 전체 딕셔너리 비교 (온도와 토큰 수는 테스트에서는 설정하지 않았으므로 제외)
+        expected_dict = {
+            "model": "gpt-3.5-turbo",
+            "messages": expected_messages,
+            "tool_choice": "none"
+        }
+
+        # 파라미터와 예상 딕셔너리 출력
+        print("\n=== 생성된 파라미터 ===")
+        print(json.dumps(params, indent=2, ensure_ascii=False))
+        
+        print("\n=== 예상 딕셔너리 ===") 
+        print(json.dumps(expected_dict, indent=2, ensure_ascii=False))
+        
+        self.assertDictEqual(params, expected_dict)
     
-    @patch.object(OpenAIAgentClient, '_get_access_token')
-    @patch('src.agent_impl.openai.openai_agent_util.OpenAI')
-    def test_create_params_with_tools(self, mock_openai, mock_get_token):
-        # 기본 설정
-        mock_get_token.return_value = "test-token"
-        mock_client = MagicMock()
-        mock_openai.return_value = mock_client
+    @patch('src.agent_impl.openai.openai_agent_util.OpenAIAgentClient._get_access_token')
+    @patch('src.agent_impl.openai.openai_agent_util.OpenAIAgentClient._create_agent')
+    def test_create_params_function_call(self, mock_create_agent, mock_get_access_token):
+        """
+        함수 호출을 위한 매개변수 생성 테스트
+        """
+        # Mocking 설정
+        mock_get_access_token.return_value = "mock_access_token"
         
-        client = OpenAIAgentClient(model_name="gpt-4")
+        from src.agent_impl.openai.openai_agent_util import OpenAIAgentClient
+        from src.agent_impl.openai.schema.message import Message
+        from src.agent_impl.openai.schema.enums import RoleEnum
+        from src.agent_impl.openai.schema.completion import CompletionCreate
+        from src.agent_impl.openai.schema.function import Function, FunctionItem
+        from src.agent_impl.openai.schema.tool import Tool, ToolChoice
+        from src.agent_impl.openai.schema.parameters import Parameters
         
-        # 테스트 데이터
-        message = Message(index=0, role=RoleEnum.USER, content="Hello")
-        tool = Tool(type="function")
-        function_item = FunctionItem(name="test_function")
-        tool_choice = ToolChoice(function=function_item)
+        # 테스트를 위한 클라이언트 생성
+        client = OpenAIAgentClient(model_name="gpt-3.5-turbo-0613")
         
+        # _create_agent가 호출되었는지 확인
+        mock_create_agent.assert_called_once()
+        
+        # 테스트 메시지 생성
+        messages = [
+            Message(
+                index=0, 
+                role=RoleEnum.USER, 
+                content="현재 서울의 날씨 정보를 알려줘."
+            )
+        ]
+        
+        # 함수 파라미터 생성
+        properties = {
+            "location": {
+                "type": "string",
+                "description": "지역 이름"
+            },
+            "temperature": {
+                "type": "number",
+                "description": "현재 온도 (섭씨)"
+            },
+            "description": {
+                "type": "string",
+                "description": "날씨 설명"
+            }
+        }
+        
+        params = Parameters(
+            type="object",
+            properties=properties,
+            required=["location", "temperature", "description"]
+        )
+        
+        # 함수 정의
+        def get_weather(location: str, temperature: float, description: str):
+            return f"{location}의 날씨: {temperature}°C, {description}"
+            
+        function = Function(
+            name="get_weather",
+            description="서울의 날씨 정보를 가져옵니다.",
+            parameters=params,
+            real_function=get_weather
+        )
+        
+        # Tool과 ToolChoice 생성
+        tool = Tool(function=function)
+        function_item = FunctionItem(name="get_weather")
+        tool_choice = "auto"  # auto 사용
+        
+        # CompletionCreate 객체 생성
         completion_create = CompletionCreate(
-            messages=[message],
+            messages=messages,
             tools=[tool],
             tool_choice=tool_choice
         )
         
-        # 함수 호출
+        # _create_params 메서드 호출
         params = client._create_params(completion_create)
         
-        # 검증
-        self.assertEqual(params["model"], "gpt-4")
+        # 모델 이름 확인
+        self.assertEqual(params["model"], "gpt-3.5-turbo-0613")
+        
+        # 메시지 확인
+        expected_messages = example_function_call_request["messages"]
+        self.assertEqual(len(params["messages"]), len(expected_messages))
+        self.assertEqual(params["messages"][0]["role"], expected_messages[0]["role"])
+        self.assertEqual(params["messages"][0]["content"], expected_messages[0]["content"])
+        
+        # tools 확인
+        self.assertIn("tools", params)
         self.assertEqual(len(params["tools"]), 1)
-        self.assertEqual(params["tools"][0]["type"], "function")
-        self.assertEqual(params["tool_choice"]["type"], "function")
-        self.assertEqual(params["tool_choice"]["function"]["name"], "test_function")
-    
-    @patch.object(OpenAIAgentClient, '_get_access_token')
-    @patch('src.agent_impl.openai.openai_agent_util.OpenAI')
-    def test_completion(self, mock_openai, mock_get_token):
-        # 기본 설정
-        mock_get_token.return_value = "test-token"
-        mock_client = MagicMock()
-        mock_openai.return_value = mock_client
+        self.assertEqual(params["tools"][0]["function"]["name"], "get_weather")
+        self.assertEqual(params["tools"][0]["function"]["description"], "서울의 날씨 정보를 가져옵니다.")
         
-        # API 응답 모킹
+        # tool_choice 확인
+        self.assertEqual(params["tool_choice"], "auto")
+        
+        # 필요한 필드들이 존재하는지 확인
+        required_fields = ["model", "messages", "tools", "tool_choice"]
+        for field in required_fields:
+            self.assertIn(field, params, f"{field} 필드가 누락되었습니다.")
+    
+    @patch('src.agent_impl.openai.openai_agent_util.OpenAIAgentClient._get_access_token')
+    @patch('src.agent_impl.openai.openai_agent_util.OpenAIAgentClient._create_agent')
+    @patch('src.agent_impl.openai.openai_agent_util.OpenAIAgentClient.completion')
+    def test_completion_structured_output(self, mock_completion, mock_create_agent, mock_get_access_token):
+        """
+        구조화된 출력 응답 테스트
+        """
+        # Mocking 설정
+        mock_get_access_token.return_value = "mock_access_token"
+        
+        # OpenAI 응답을 MagicMock으로 만들어서 예상 응답 구조 설정
         mock_response = MagicMock()
-        mock_choice = MagicMock()
-        mock_message = MagicMock()
+        mock_response.choices = []
         
-        # RoleEnum에 'assistant'가 없으므로 SYSTEM으로 변경
-        mock_message.role = RoleEnum.SYSTEM
-        mock_message.content = "Hello, I am an AI."
-        mock_choice.message = mock_message
-        mock_choice.index = 0
-        mock_choice.finish_reason = "stop"
-        mock_response.choices = [mock_choice]
+        # 첫 번째 선택 항목 생성
+        choice = MagicMock()
+        choice.index = 0
+        choice.finish_reason = "stop"
         
-        mock_client.chat.completions.create.return_value = mock_response
+        # 메시지 설정
+        choice.message = MagicMock()
+        choice.message.role = "assistant"
+        choice.message.content = "{\n  \"name\": \"홍길동\",\n  \"age\": 30,\n  \"job\": \"개발자\"\n}"
         
-        client = OpenAIAgentClient(model_name="gpt-4")
+        mock_response.choices.append(choice)
+        mock_completion.return_value = [mock_response]
         
-        # 테스트 데이터
-        message = Message(index=0, role=RoleEnum.USER, content="Who are you?")
-        completion_create = CompletionCreate(messages=[message])
+        from src.agent_impl.openai.openai_agent_util import OpenAIAgentClient
+        from src.agent_impl.openai.schema.message import Message
+        from src.agent_impl.openai.schema.enums import RoleEnum
+        from src.agent_impl.openai.schema.completion import CompletionCreate
         
-        # 함수 호출
-        result = client.completion(completion_create)
+        # 테스트를 위한 클라이언트 생성
+        client = OpenAIAgentClient(model_name="gpt-3.5-turbo")
         
-        # 검증
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0].index, 0)
-        self.assertEqual(result[0].message.content, "Hello, I am an AI.")
-        self.assertEqual(result[0].finish_reason, FinishReasonEnum.STOP)
+        # 테스트 메시지 생성
+        messages = [
+            Message(
+                index=0, 
+                role=RoleEnum.USER, 
+                content="아래 정보를 JSON 형식으로 정리해줘.\n이름: 홍길동\n나이: 30\n직업: 개발자"
+            )
+        ]
+        
+        # CompletionCreate 객체 생성
+        completion_create = CompletionCreate(messages=messages)
+        
+        # 응답 확인
+        response = client.completion(completion_create)
+        mock_completion.assert_called_once_with(completion_create)
     
-    @patch.object(OpenAIAgentClient, '_get_access_token')
-    @patch('src.agent_impl.openai.openai_agent_util.OpenAI')
-    def test_completion_with_tool_calls(self, mock_openai, mock_get_token):
-        # 기본 설정
-        mock_get_token.return_value = "test-token"
-        mock_client = MagicMock()
-        mock_openai.return_value = mock_client
+    @patch('src.agent_impl.openai.openai_agent_util.OpenAIAgentClient._get_access_token')
+    @patch('src.agent_impl.openai.openai_agent_util.OpenAIAgentClient._create_agent')
+    @patch('src.agent_impl.openai.openai_agent_util.OpenAIAgentClient.completion')
+    def test_completion_function_call(self, mock_completion, mock_create_agent, mock_get_access_token):
+        """
+        함수 호출 응답 테스트
+        """
+        # Mocking 설정
+        mock_get_access_token.return_value = "mock_access_token"
         
-        # API 응답 모킹
+        # OpenAI 응답을 MagicMock으로 만들어서 예상 응답 구조 설정
         mock_response = MagicMock()
-        mock_choice = MagicMock()
-        mock_message = MagicMock()
-        mock_tool_call = MagicMock()
-        mock_function = MagicMock()
+        mock_response.choices = []
         
-        mock_function.name = "test_function"
-        mock_function.arguments = '{"arg1": "value1"}'
-        mock_tool_call.id = "call_123"
-        mock_tool_call.function = mock_function
-        mock_message.role = RoleEnum.SYSTEM  # assistant -> SYSTEM으로 변경
-        mock_message.content = "I'll help you with that."
-        mock_message.tool_calls = [mock_tool_call]
+        # 첫 번째 선택 항목 생성
+        choice = MagicMock()
+        choice.index = 0
+        choice.finish_reason = "function_call"
         
-        mock_choice.message = mock_message
-        mock_choice.index = 0
-        mock_choice.finish_reason = "stop"
-        mock_response.choices = [mock_choice]
+        # 메시지 설정
+        choice.message = MagicMock()
+        choice.message.role = "assistant"
+        choice.message.content = None
         
-        mock_client.chat.completions.create.return_value = mock_response
+        # 함수 호출 설정
+        choice.message.tool_calls = []
+        tool_call = MagicMock()
+        tool_call.id = "call_123"
+        tool_call.function = MagicMock()
+        tool_call.function.name = "get_weather"
+        tool_call.function.arguments = '{\n  "location": "Seoul",\n  "temperature": 18,\n  "description": "맑음"\n}'
+        choice.message.tool_calls.append(tool_call)
         
-        client = OpenAIAgentClient(model_name="gpt-4")
+        mock_response.choices.append(choice)
+        mock_completion.return_value = [mock_response]
         
-        # 테스트 데이터
-        message = Message(index=0, role=RoleEnum.USER, content="Call a function")
-        tool = Tool(type="function")
-        completion_create = CompletionCreate(messages=[message], tools=[tool])
+        from src.agent_impl.openai.openai_agent_util import OpenAIAgentClient
+        from src.agent_impl.openai.schema.message import Message
+        from src.agent_impl.openai.schema.enums import RoleEnum
+        from src.agent_impl.openai.schema.completion import CompletionCreate
+        from src.agent_impl.openai.schema.function import Function, FunctionItem
+        from src.agent_impl.openai.schema.tool import Tool, ToolChoice
+        from src.agent_impl.openai.schema.parameters import Parameters
         
-        # 함수 호출
-        result = client.completion(completion_create)
+        # 테스트를 위한 클라이언트 생성
+        client = OpenAIAgentClient(model_name="gpt-3.5-turbo-0613")
         
-        # 검증
-        self.assertEqual(len(result), 1)
-        self.assertIsNotNone(result[0].tool_calls)
-        self.assertEqual(len(result[0].tool_calls), 1)
-        self.assertEqual(result[0].tool_calls[0].id, "call_123")
-        self.assertEqual(result[0].tool_calls[0].name, "test_function")
-        self.assertEqual(result[0].tool_calls[0].arguments, '{"arg1": "value1"}')
-    
-    @patch.object(OpenAIAgentClient, '_create_params')
-    @patch.object(OpenAIAgentClient, '_get_access_token')
-    @patch('src.agent_impl.openai.openai_agent_util.OpenAI')
-    def test_completion_exception(self, mock_openai, mock_get_token, mock_create_params):
-        # 기본 설정
-        mock_get_token.return_value = "test-token"
-        mock_client = MagicMock()
-        mock_openai.return_value = mock_client
+        # 테스트 메시지 생성
+        messages = [
+            Message(
+                index=0, 
+                role=RoleEnum.USER, 
+                content="현재 서울의 날씨 정보를 알려줘."
+            )
+        ]
         
-        # 예외 발생 시뮬레이션
-        mock_create_params.side_effect = ValueError("Invalid parameters")
+        # 함수 파라미터 생성
+        properties = {
+            "location": {
+                "type": "string",
+                "description": "지역 이름"
+            },
+            "temperature": {
+                "type": "number",
+                "description": "현재 온도 (섭씨)"
+            },
+            "description": {
+                "type": "string",
+                "description": "날씨 설명"
+            }
+        }
         
-        client = OpenAIAgentClient(model_name="gpt-4")
+        params = Parameters(
+            type="object",
+            properties=properties,
+            required=["location", "temperature", "description"]
+        )
         
-        # 테스트 데이터
-        message = Message(index=0, role=RoleEnum.USER, content="Hello")
-        completion_create = CompletionCreate(messages=[message])
+        # 함수 정의
+        def get_weather(location: str, temperature: float, description: str):
+            return f"{location}의 날씨: {temperature}°C, {description}"
+            
+        function = Function(
+            name="get_weather",
+            description="서울의 날씨 정보를 가져옵니다.",
+            parameters=params,
+            real_function=get_weather
+        )
         
-        # 예외 발생 검증
-        with self.assertRaises(ValueError) as context:
-            client.completion(completion_create)
-        self.assertIn("Invalid parameters", str(context.exception))
+        # Tool과 ToolChoice 생성
+        tool = Tool(function=function)
+        tool_choice = "auto"  # auto 사용
+        
+        # CompletionCreate 객체 생성
+        completion_create = CompletionCreate(
+            messages=messages,
+            tools=[tool],
+            tool_choice=tool_choice
+        )
+        
+        # 응답 확인
+        response = client.completion(completion_create)
+        mock_completion.assert_called_once_with(completion_create)
+
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()
+

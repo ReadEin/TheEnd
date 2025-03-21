@@ -3,7 +3,7 @@ from openai import OpenAI
 from openai.resources.chat.completions import Completions
 from pydantic import BaseModel
 
-from src.agent_impl.openai.openai_agent_schema import CompletionChoice, CompletionCreate, Message, FinishReasonEnum, FunctionCall
+from src.agent_impl.openai.schema.completion import CompletionChoice, CompletionCreate, Message, FinishReasonEnum, FunctionCall
 
 class OpenAIAgentClient:
     _chat_completion_client : Completions
@@ -46,9 +46,10 @@ class OpenAIAgentClient:
             }
             
             # 선택적 매개변수 추가
-            if completion_create.response_format is not None and isinstance(completion_create.response_format, BaseModel):
-                params["response_format"] = completion_create.response_format.model_dump()
-            
+            if (completion_create.response_format is not None and 
+                (isinstance(completion_create.response_format, BaseModel) or 
+                 isinstance(completion_create.response_format, dict))):
+                params["response_format"] = completion_create.response_format
             if completion_create.tools is not None:
                 params["tools"] = [tool.model_dump() for tool in completion_create.tools]
             
