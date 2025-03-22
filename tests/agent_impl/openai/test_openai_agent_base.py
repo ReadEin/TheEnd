@@ -1,5 +1,6 @@
 ﻿import textwrap
 import unittest
+import os
 
 from src.agent_impl.openai.openai_agent_base import OpenAIAgentBase, RequestBase, RequestPrepare, ToolChoiceType
 from src.agent_impl.openai.schema.function import Function
@@ -10,6 +11,10 @@ from src.agent_impl.openai.schema.tool import Tool
 
 class TestOpenAIAgentBase(unittest.TestCase):
     def test_openai_agent_base(self):
+        # 환경 변수 확인
+        if os.environ.get('USE_API') != 'true':
+            self.skipTest("USE_API 환경변수가 'true'로 설정되지 않아 테스트를 건너뜁니다.")
+
         tools = [
             Tool(
                 name="summarize_conversation",

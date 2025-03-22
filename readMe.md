@@ -43,10 +43,8 @@ isort
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}",
-                "TEST_MODE": "true"
-            }
+            "cwd": "${workspaceRoot}",
+            "env": {"PYTHONPATH": "${workspaceRoot}"},
         },
         {
             "name": "Python Debugger: All Test File",
@@ -54,17 +52,20 @@ isort
             "request": "launch",
             "module": "unittest",
             "console": "integratedTerminal",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}",
-                "TEST_MODE": "true"
-            }
+            "cwd": "${workspaceRoot}",
+            "env": {"PYTHONPATH": "${workspaceRoot}"},
+        },
+        {
+            "name": "Python: Pytest Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceRoot}",
+            "env": {"PYTHONPATH": "${workspaceRoot}"},
         }
     ]
 }
 ```
 
-   # 모의 객체 사용 (기본값)
-   pytest tests/agent_impl/test_openai_chat_agent.py -m "api_key" -v
-   
-   # 실제 API 사용
-   USE_MOCK=False pytest tests/agent_impl/test_openai_chat_agent.py -m "api_key" -v
+#### .private.openai_token 에 본인 api 토큰을 넣어야, 실제 api 전송이 가능
