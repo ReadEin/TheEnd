@@ -1,14 +1,18 @@
-﻿from typing import Any
+﻿import json
+from typing import Any
 from openai import OpenAI
 from openai.resources.chat.completions import Completions
 from pydantic import BaseModel
+import os
 
 from src.agent_impl.openai.schema.completion import CompletionChoice, CompletionCreate, Message, FinishReasonEnum, FunctionCall
-
 class OpenAIAgentClient:
     _chat_completion_client : Completions
     _model_name : str
+
     def __init__(self, model_name: str):
+        # 환경 변수로 기본 인코딩을 UTF-8로 설정
+        os.environ["PYTHONIOENCODING"] = "utf-8"
         self._model_name = model_name
         self._create_agent()
         
@@ -17,11 +21,18 @@ class OpenAIAgentClient:
         실행 인자로부터 API 토큰을 가져옵니다.
         """
         import os
-        if not os.path.exists(".private.openai_token"):
+        if not os.path.exists(".private/openai_token"):
             # 3. 토큰을 찾을 수 없는 경우 오류 발생
             raise ValueError("API 토큰을 찾을 수 없습니다. 환경 변수(OPENAI_API_KEY)를 설정하거나 --api-token 인자를 사용하세요.")
-        with open(".private.openai_token", "r") as f:
-            return f.read().strip()
+        with open(".private/openai_token", "r", encoding="utf-8") as f:
+            token = f.read().strip()
+            # BOM 문자 제거
+            token = token.replace('\ufeff', '')
+            # 제어 문자 제거
+            for i in range(32):
+                if i not in (10, 13):  # 10=LF, 13=CR
+                    token = token.replace(chr(i), '')
+            return token
 
     def _create_agent(self):
         try:
@@ -44,21 +55,21 @@ class OpenAIAgentClient:
                     } for message in completion_create.messages
                 ]
             }
-            
+
             # 선택적 매개변수 추가
-            if (completion_create.response_format is not None and 
-                (isinstance(completion_create.response_format, BaseModel) or 
-                 isinstance(completion_create.response_format, dict))):
+            if completion_create.response_format is not None and (
+                isinstance(completion_create.response_format, (BaseModel, dict))
+            ):
                 params["response_format"] = completion_create.response_format
             if completion_create.tools is not None:
                 params["tools"] = [tool.model_dump() for tool in completion_create.tools]
-            
+
             if completion_create.tool_choice is not None:
                 if isinstance(completion_create.tool_choice, str):
                     params["tool_choice"] = completion_create.tool_choice
                 else:
                     params["tool_choice"] = completion_create.tool_choice.model_dump()
-            
+
             return params
         except Exception as e:
             print(e)
@@ -66,9 +77,10 @@ class OpenAIAgentClient:
     
     def completion(self, completion_create: CompletionCreate) -> list[CompletionChoice]:
         try:
-            params : dict = self._create_params(completion_create)
-            response : Any = self._chat_completion_client.create(**params)
-            
+            params: dict = self._create_params(completion_create)
+            print(f"params: {json.dumps(params, indent=2, ensure_ascii=False, sort_keys=True)}")
+            response: Any = self._chat_completion_client.create(**params)
+            print(f"response: {json.dumps(response.model_dump(), indent=2, ensure_ascii=False, sort_keys=True)}")
             # API 응답에서 CompletionChoice 객체 리스트로 변환
             completion_choices : list[CompletionChoice] = []
             
@@ -99,7 +111,7 @@ class OpenAIAgentClient:
                             tool_calls.append(function_call)
                 
                 # 종료 이유 변환
-                finish_reason : FinishReasonEnum = FinishReasonEnum.NULL
+                finish_reason : FinishReasonEnum = FinishReasonEnum.NONE
                 if choice.finish_reason == "stop":
                     finish_reason = FinishReasonEnum.STOP
                 elif choice.finish_reason == "length":

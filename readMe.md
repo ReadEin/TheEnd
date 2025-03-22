@@ -62,3 +62,9 @@ isort
     ]
 }
 ```
+
+   # 모의 객체 사용 (기본값)
+   pytest tests/agent_impl/test_openai_chat_agent.py -m "api_key" -v
+   
+   # 실제 API 사용
+   USE_MOCK=False pytest tests/agent_impl/test_openai_chat_agent.py -m "api_key" -v

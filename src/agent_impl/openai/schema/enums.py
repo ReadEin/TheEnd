@@ -8,4 +8,5 @@ class FinishReasonEnum(str, Enum):
 
 class RoleEnum(str, Enum):
     USER = "user"
-    SYSTEM = "system" 
+    SYSTEM = "system"
+    ASSISTANT = "assistant"

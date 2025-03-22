@@ -49,7 +49,7 @@ class TestTool(unittest.TestCase):
         params = Parameters(
             type="object",
             properties=properties,
-            additional_properties=False
+            additionalProperties=False
         )
         
         # Function 생성

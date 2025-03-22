@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel
 from .enums import RoleEnum
 
@@ -5,6 +6,6 @@ class Role(BaseModel):
     role: RoleEnum
 
 class Message(BaseModel):
-    index: int
+    index: Optional[int] = None
     role: RoleEnum
-    content: str 
+    content: Optional[str] = None

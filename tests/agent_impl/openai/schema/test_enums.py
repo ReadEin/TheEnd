@@ -1,5 +1,6 @@
 from src.agent_impl.openai.schema.enums import FinishReasonEnum, RoleEnum
 import unittest
+from openai import OpenAI 
 
 class TestFinishReasonEnum(unittest.TestCase):
     def test_finish_reason_enum_values(self):

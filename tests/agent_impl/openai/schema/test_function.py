@@ -47,7 +47,7 @@ class TestFunction(unittest.TestCase):
             type = "object",
             properties = properties,
             required = ["location"],
-            additional_properties = False
+            additionalProperties = False
         )
         
         def mock_function():

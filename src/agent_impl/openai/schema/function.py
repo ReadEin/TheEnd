@@ -8,7 +8,7 @@ class Function(BaseModel):
     description: str
     strict: bool = True
     parameters: Parameters
-    real_function: Callable = Field(exclude=True)
+    real_function: Callable[[dict], dict] = Field(exclude=True)
 
 class FunctionCall(BaseModel):
     id: str

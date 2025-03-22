@@ -43,7 +43,7 @@ class TestParameters(unittest.TestCase):
             type="object",
             properties=properties,
             required=["location"],
-            additional_properties=False
+            additionalProperties=False
         )
         
         # model_dump()를 사용하여 딕셔너리 변환 (Pydantic v2)
